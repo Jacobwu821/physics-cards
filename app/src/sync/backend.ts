@@ -162,7 +162,7 @@ export class GitHubBackend implements SyncBackend {
   name = 'GitHub 仓库'
   private owner: string
   private repo: string
-  constructor(private token: string, repo: string, private branch = 'main', private apiBase = 'https://api.github.com', private fetchImpl: typeof fetch = fetch) {
+  constructor(private token: string, repo: string, private branch = 'main', private apiBase = 'https://api.github.com', private fetchImpl: typeof fetch = fetch.bind(globalThis)) {
     const m = repo.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').split('/')
     this.owner = m[0] || ''
     this.repo = m[1] || ''

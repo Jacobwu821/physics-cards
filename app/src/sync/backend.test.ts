@@ -78,6 +78,20 @@ function fakeGitHub() {
 }
 
 describe('GitHub 仓库后端', () => {
+  it('默认 fetch 保持浏览器全局对象作为调用接收者', async () => {
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = function (this: unknown) {
+      if (this !== globalThis) throw new TypeError('Illegal invocation')
+      return Promise.resolve(new Response(JSON.stringify({ id: 42 }), { status: 200 }))
+    } as typeof fetch
+    try {
+      const backend = new GitHubBackend('tok', 'me/data')
+      expect((await backend.ping()).serverId).toBe('github-42')
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
   it('首次推送创建 data.json；两台设备先后推送不互相覆盖；拉取得到两者', async () => {
     const gh = fakeGitHub()
     const A = new GitHubBackend('tok', 'me/data', 'main', 'https://api.github.com', gh.fetchImpl)
