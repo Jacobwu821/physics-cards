@@ -1,0 +1,13 @@
+{
+  "name": "physics-cards",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": ["app", "server"],
+  "scripts": {
+    "dev": "npm --workspace app run dev",
+    "build": "npm --workspace app run build",
+    "test": "npm --workspace app run test && npm --workspace server run test",
+    "start": "npm --workspace server run start"
+  }
+}
