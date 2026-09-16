@@ -4,6 +4,8 @@
 
 ## 平台方案（实际支持的）
 
+> 最省事的用法见下文「零服务器方案」：网页放 GitHub Pages，数据放你自己的 GitHub 私有仓库。
+
 | 平台 | 使用方式 | 说明 |
 |---|---|---|
 | Windows / Mac | 浏览器打开同步服务地址；Chrome/Edge 地址栏「安装应用」可当独立窗口 | 编辑、整理为主，宽屏双栏编辑与预览，快捷键 |
@@ -16,7 +18,45 @@
 
 **你需要自己准备的**：一台长期开着的机器运行同步服务（家里的 Windows/Mac 即可），并保证 iPhone 能访问它。出门用流量时的方案见下一节。
 
-## 出门用流量：推荐部署方式
+## 零服务器方案：GitHub Pages + GitHub 私有仓库同步（推荐）
+
+什么都不用安装：网页放在 GitHub Pages（https，自带离线缓存），数据放在你自己的 GitHub 私有仓库里，应用通过 GitHub API 读写。手机和电脑打开同一个网址即可，手机上可「添加到主屏幕」。
+
+### 第一步：把代码发布到 GitHub Pages
+
+仓库已初始化并提交（`git log` 可见），`.github/workflows/pages.yml` 会在每次推送 main 分支时自动构建并部署。
+
+1. 在 GitHub 网页上新建一个仓库，例如 `physics-cards`（**公开**；免费账号只有公开仓库能用 Pages。仓库里只有代码，你的卡片不在其中）。不要勾选任何初始化文件。
+2. 在本机推送：
+
+   ```bash
+   cd E:\PhysicsCards
+   git remote add origin https://github.com/你的用户名/physics-cards.git
+   git push -u origin main
+   ```
+
+3. 打开仓库的 Settings → Pages，把 Source 选为 **GitHub Actions**。然后到 Actions 页面等 "Deploy to GitHub Pages" 跑完（约 1–2 分钟）。
+4. 网址是 `https://你的用户名.github.io/physics-cards/`。手机 Safari 打开 → 分享 → 添加到主屏幕；电脑浏览器直接打开或「安装应用」。
+
+以后修改代码只需 `git push`，Pages 会自动更新，打开页面时应用会自动切换到新版本。
+
+### 第二步：配置同步（GitHub 私有仓库）
+
+1. 在 GitHub 再新建一个**私有**仓库放数据，例如 `physics-cards-data`（可勾选 "Add a README" 以创建 main 分支）。
+2. GitHub 头像 → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token：
+   - Repository access：Only select repositories → 选 `physics-cards-data`
+   - Permissions → Repository permissions → **Contents: Read and write**
+   - 有效期按需（到期后重新生成并在设置里更新即可）
+3. 在每台设备打开应用 → 设置 → 同步 → 选「GitHub 私有仓库」，填仓库 `你的用户名/physics-cards-data`、令牌、分支 `main` → 测试连接 → 保存设置。
+4. 之后自动同步（启动时、有改动 3 秒后、每 5 分钟、切回窗口时）。数据以 `sync/data.json` 和 `sync/images/` 存在私有仓库中，每次同步是一次提交，仓库历史就是天然的备份。
+
+并发安全：写回前会带上文件的 sha，GitHub 在 sha 不匹配时拒绝写入（409），应用会重新读取、合并后再写，两台设备同时同步不会互相覆盖；同一张卡两端都改过时，后到的一方生成「冲突副本」。令牌只保存在各设备的浏览器里，不会进入代码仓库。
+
+### 手机版与桌面版
+
+同一个网址：手机（宽度 < 900px）自动用底部导航的单手布局，电脑用侧栏与双栏编辑。设置 → 外观 → 布局 可强制「手机版」或「桌面版」。
+
+## 出门用流量：自托管服务器方案（备选）
 
 手机在外面要满足两件事：页面本身能打开（离线应用壳），以及能连到同步服务（公网可达）。
 
