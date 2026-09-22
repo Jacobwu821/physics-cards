@@ -2,7 +2,7 @@
 import { db } from './db'
 import { uid } from './id'
 import type {
-  Card, CardSource, CardState, CardTypeId, Deck, Draft, ImageRecord, Rating, ReviewLog, ReviewSession, Settings,
+  Card, CardSource, CardState, CardTypeId, Deck, Draft, Folder, ImageRecord, Rating, ReviewLog, ReviewSession, Settings,
 } from './types'
 import { applyRating, makeScheduler, newState, undoRating } from '../scheduler/scheduler'
 
@@ -31,9 +31,38 @@ export async function updateSettings(patch: Partial<Settings>): Promise<Settings
 }
 
 // ---------- 牌组 ----------
-export async function createDeck(name: string, sample: 0 | 1 = 0): Promise<Deck> {
+export async function createFolder(name: string): Promise<Folder> {
   const t = now()
-  const deck: Deck = { id: uid(), name: name.trim(), sample, createdAt: t, updatedAt: t, rev: 0, dirty: 1, deleted: 0 }
+  const folder: Folder = { id: uid(), name: name.trim(), createdAt: t, updatedAt: t, rev: 0, dirty: 1, deleted: 0 }
+  await db.folders.put(folder)
+  return folder
+}
+
+export async function renameFolder(id: string, name: string): Promise<void> {
+  await db.folders.update(id, { name: name.trim(), updatedAt: now(), dirty: 1 })
+}
+
+/** 删除文件夹只解除归属，不删除牌组、卡片或复习进度。 */
+export async function deleteFolder(id: string): Promise<void> {
+  const t = now()
+  await db.transaction('rw', db.folders, db.decks, async () => {
+    const decks = await db.decks.filter((d) => !d.deleted && d.folderId === id).toArray()
+    for (const deck of decks) await db.decks.update(deck.id, { folderId: null, updatedAt: t, dirty: 1 })
+    await db.folders.update(id, { deleted: 1, updatedAt: t, dirty: 1 })
+  })
+}
+
+export async function moveDeckToFolder(id: string, folderId: string | null): Promise<void> {
+  if (folderId) {
+    const folder = await db.folders.get(folderId)
+    if (!folder || folder.deleted) throw new Error('目标文件夹不存在')
+  }
+  await db.decks.update(id, { folderId, updatedAt: now(), dirty: 1 })
+}
+
+export async function createDeck(name: string, sample: 0 | 1 = 0, folderId: string | null = null): Promise<Deck> {
+  const t = now()
+  const deck: Deck = { id: uid(), name: name.trim(), folderId, sample, createdAt: t, updatedAt: t, rev: 0, dirty: 1, deleted: 0 }
   await db.decks.put(deck)
   return deck
 }

@@ -59,7 +59,7 @@ export default function Settings() {
     if (!pendingImport) return
     const r = await importBackup(pendingImport, mode)
     setPendingImport(null)
-    toast(`已导入 ${r.decks} 个牌组、${r.cards} 张卡片、${r.logs} 条复习记录`)
+    toast(`已导入 ${r.folders} 个文件夹、${r.decks} 个牌组、${r.cards} 张卡片、${r.logs} 条复习记录`)
   }
 
   return (
@@ -182,7 +182,7 @@ export default function Settings() {
 
       <div className="panel stack">
         <h2>备份与恢复</h2>
-        <p className="muted small">备份文件包含牌组、卡片（含格式与公式源码）、标签、来源、图片和全部复习记录。</p>
+        <p className="muted small">备份文件包含文件夹、牌组、卡片（含格式与公式源码）、标签、来源、图片和全部复习记录。</p>
         <div className="row">
           <button className="btn" onClick={doExport}>导出备份（JSON）</button>
           <button className="btn" onClick={() => fileRef.current?.click()}>导入备份…</button>
@@ -216,7 +216,7 @@ export default function Settings() {
 
       {pendingImport && (
         <Dialog title="导入备份" onClose={() => setPendingImport(null)}>
-          <p>备份导出于 {fmtDateTime(pendingImport.exportedAt)}，包含 {pendingImport.decks.filter((d) => !d.deleted).length} 个牌组、{pendingImport.cards.filter((c) => !c.deleted).length} 张卡片、{pendingImport.logs.length} 条复习记录、{pendingImport.images.length} 张图片。</p>
+          <p>备份导出于 {fmtDateTime(pendingImport.exportedAt)}，包含 {pendingImport.folders?.filter((f) => !f.deleted).length ?? 0} 个文件夹、{pendingImport.decks.filter((d) => !d.deleted).length} 个牌组、{pendingImport.cards.filter((c) => !c.deleted).length} 张卡片、{pendingImport.logs.length} 条复习记录、{pendingImport.images.length} 张图片。</p>
           <div className="stack">
             <button className="btn" onClick={() => doImport('merge')}>合并到现有数据（按 id 合并，较新的记录胜出）</button>
             <button className="btn danger" onClick={() => doImport('replace')}>替换本设备全部数据</button>
@@ -226,9 +226,9 @@ export default function Settings() {
       )}
       {confirmClear && (
         <ConfirmDialog title="清除本设备数据" danger confirmText="清除" onClose={() => setConfirmClear(false)}
-          message="将删除本设备上的全部牌组、卡片、图片和复习记录（不影响服务器和其他设备）。建议先导出备份。"
+          message="将删除本设备上的全部文件夹、牌组、卡片、图片和复习记录（不影响服务器和其他设备）。建议先导出备份。"
           onConfirm={async () => {
-            await Promise.all([db.decks.clear(), db.cards.clear(), db.states.clear(), db.logs.clear(), db.images.clear(), db.drafts.clear(), db.sessions.clear()])
+            await Promise.all([db.folders.clear(), db.decks.clear(), db.cards.clear(), db.states.clear(), db.logs.clear(), db.images.clear(), db.drafts.clear(), db.sessions.clear()])
             await updateSettings({ lastSeq: 0 })
             toast('已清除本地数据')
           }} />

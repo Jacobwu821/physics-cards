@@ -4,9 +4,20 @@ export type CardTypeId =
   | 'concept' | 'formula' | 'magnitude' | 'method' | 'paper'
   | 'logic' | 'condition' | 'compare' | 'figure' | 'pitfall'
 
+export interface Folder {
+  id: string
+  name: string
+  createdAt: number
+  updatedAt: number
+  rev: number
+  dirty: 0 | 1
+  deleted: 0 | 1
+}
+
 export interface Deck {
   id: string
   name: string
+  folderId?: string | null // 旧牌组缺失此字段时归入“未分类”
   sample: 0 | 1          // 示例数据标记
   createdAt: number
   updatedAt: number

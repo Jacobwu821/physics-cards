@@ -44,7 +44,7 @@ export default function Today() {
 
       {decks.length === 0 && (
         <div className="notice info">
-          还没有牌组。去<Link to="/decks">牌组</Link>页新建一个，或在<Link to="/settings">设置</Link>中载入示例数据看看效果。
+          还没有牌组。去<Link to="/decks">文件夹</Link>页创建文件夹和牌组，或在<Link to="/settings">设置</Link>中载入示例数据看看效果。
         </div>
       )}
 

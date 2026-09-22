@@ -57,7 +57,7 @@ export default function App() {
             <nav className="nav">
               <div className="brand">物理卡片</div>
               <NavLink to="/" end><span className="ico">☀</span><span>今日</span></NavLink>
-              <NavLink to="/decks"><span className="ico">▤</span><span>牌组</span></NavLink>
+              <NavLink to="/decks"><span className="ico">▤</span><span>文件夹</span></NavLink>
               <NavLink to="/library"><span className="ico">☰</span><span>卡片库</span></NavLink>
               <NavLink to="/settings"><span className="ico">⚙</span><span>设置</span></NavLink>
             </nav>

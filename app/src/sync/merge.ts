@@ -2,10 +2,10 @@
 // - deck / card：以服务器版本号 rev 做乐观并发控制。本地 dirty 且 rev 落后 → 冲突。
 //   卡片冲突不静默覆盖：服务器版本成为正本，本地版本另存为“冲突副本”卡片。
 // - state / log：按 updatedAt 后写胜出（LWW）；日志按 id 去重，重复提交不会重复更新。
-import type { Card, CardState, Deck, ReviewLog } from '../lib/types'
+import type { Card, CardState, Deck, Folder, ReviewLog } from '../lib/types'
 import { uid } from '../lib/id'
 
-export type Kind = 'deck' | 'card' | 'state' | 'log' | 'image'
+export type Kind = 'folder' | 'deck' | 'card' | 'state' | 'log' | 'image'
 
 export interface Versioned { rev: number; dirty: 0 | 1 }
 
@@ -51,11 +51,21 @@ export function resolveCardConflict(local: Card, server: Card, now: number): { c
   return { canonical, copy: makeConflictCopy(local, now) }
 }
 
-/** 牌组冲突：服务器胜出（只有名称可冲突），返回是否需要提示 */
+/** 牌组冲突：服务器胜出，并提示被覆盖的名称或文件夹变更。 */
 export function resolveDeckConflict(local: Deck, server: Deck): { canonical: Deck; notice: string | null } {
   const canonical: Deck = { ...server, dirty: 0 }
+  const notice = server.deleted ? null
+    : local.name !== server.name ? `牌组“${local.name}”在其他设备被改名为“${server.name}”，已采用后者。`
+      : (local.folderId ?? null) !== (server.folderId ?? null)
+        ? `牌组“${local.name}”在其他设备被移至另一文件夹，已采用那边的位置。`
+        : null
+  return { canonical, notice }
+}
+
+export function resolveFolderConflict(local: Folder, server: Folder): { canonical: Folder; notice: string | null } {
+  const canonical: Folder = { ...server, dirty: 0 }
   const notice = local.name !== server.name && !server.deleted
-    ? `牌组“${local.name}”在其他设备被改名为“${server.name}”，已采用后者。`
+    ? `文件夹“${local.name}”在其他设备被改名为“${server.name}”，已采用后者。`
     : null
   return { canonical, notice }
 }

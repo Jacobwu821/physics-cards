@@ -2,7 +2,7 @@
 import { db } from '../lib/db'
 import { getSettings, updateSettings } from '../lib/repo'
 import type { ImageRecord } from '../lib/types'
-import { decideIncoming, lwwReplace, resolveCardConflict, resolveDeckConflict } from './merge'
+import { decideIncoming, lwwReplace, resolveCardConflict, resolveDeckConflict, resolveFolderConflict } from './merge'
 import { makeBackend, SyncError, type PushBody, type SyncBackend } from './backend'
 
 export { SyncError }
@@ -36,6 +36,7 @@ async function doSync(): Promise<SyncResult> {
   const now = Date.now()
 
   // ---- 1. 推送 ----
+  const dFolders = await db.folders.where('dirty').equals(1).toArray()
   const dDecks = await db.decks.where('dirty').equals(1).toArray()
   const dCards = await db.cards.where('dirty').equals(1).toArray()
   const dStates = await db.states.where('dirty').equals(1).toArray()
@@ -43,16 +44,32 @@ async function doSync(): Promise<SyncResult> {
   const dImages = await db.images.where('dirty').equals(1).toArray()
   const body: PushBody = {
     deviceId,
+    folders: dFolders.map((f) => ({ ...f, baseRev: f.rev })),
     decks: dDecks.map((d) => ({ ...d, baseRev: d.rev })),
     cards: dCards.map((c) => ({ ...c, baseRev: c.rev })),
     states: dStates,
     logs: dLogs,
     images: dImages.map((i) => ({ id: i.id, mime: i.mime, size: i.size })),
   }
-  const total = dDecks.length + dCards.length + dStates.length + dLogs.length + dImages.length
+  const total = dFolders.length + dDecks.length + dCards.length + dStates.length + dLogs.length + dImages.length
   if (total > 0) {
     const resp = await backend.push(body)
-    await db.transaction('rw', [db.decks, db.cards, db.states, db.logs, db.images], async () => {
+    await db.transaction('rw', [db.folders, db.decks, db.cards, db.states, db.logs, db.images], async () => {
+      for (const r of resp.folders ?? []) {
+        const local = await db.folders.get(r.id)
+        const sent = dFolders.find((f) => f.id === r.id)!
+        if (!local) continue
+        if (r.status === 'ok') {
+          const stillDirty = local.updatedAt !== sent.updatedAt
+          await db.folders.update(r.id, { rev: r.rev, dirty: stillDirty ? 1 : 0 })
+          result.pushed++
+        } else if (r.server) {
+          const { canonical, notice } = resolveFolderConflict(local, r.server)
+          await db.folders.put(canonical)
+          result.conflicts++
+          if (notice) result.notices.push(notice)
+        }
+      }
       for (const r of resp.decks) {
         const local = await db.decks.get(r.id)
         const sent = dDecks.find((d) => d.id === r.id)!
@@ -129,7 +146,18 @@ async function doSync(): Promise<SyncResult> {
   for (let guard = 0; guard < 50; guard++) {
     const pull = await backend.pull(since)
     const missingImages: Array<{ id: string; mime: string; size: number }> = []
-    await db.transaction('rw', [db.decks, db.cards, db.states, db.logs, db.images], async () => {
+    await db.transaction('rw', [db.folders, db.decks, db.cards, db.states, db.logs, db.images], async () => {
+      for (const inc of pull.folders ?? []) {
+        const local = await db.folders.get(inc.id)
+        const d = decideIncoming(local, inc.rev)
+        if (d === 'replace') { await db.folders.put({ ...inc, dirty: 0 }); result.pulled++ }
+        else if (d === 'conflict' && local) {
+          const { canonical, notice } = resolveFolderConflict(local, inc)
+          await db.folders.put(canonical)
+          result.conflicts++
+          if (notice) result.notices.push(notice)
+        }
+      }
       for (const inc of pull.decks) {
         const local = await db.decks.get(inc.id)
         const d = decideIncoming(local, inc.rev)

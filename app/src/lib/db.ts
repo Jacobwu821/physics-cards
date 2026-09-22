@@ -1,9 +1,10 @@
 import Dexie, { type Table } from 'dexie'
 import type {
-  Card, CardState, Deck, Draft, ImageRecord, KV, ReviewLog, ReviewSession, Settings,
+  Card, CardState, Deck, Draft, Folder, ImageRecord, KV, ReviewLog, ReviewSession, Settings,
 } from './types'
 
 export class CardsDB extends Dexie {
+  folders!: Table<Folder, string>
   decks!: Table<Deck, string>
   cards!: Table<Card, string>
   states!: Table<CardState, string>
@@ -27,6 +28,7 @@ export class CardsDB extends Dexie {
       settings: 'id',
       kv: 'key',
     })
+    this.version(2).stores({ folders: 'id, name, updatedAt, dirty, deleted' })
   }
 }
 

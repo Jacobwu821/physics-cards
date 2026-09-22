@@ -48,6 +48,18 @@ test('推送新卡片得到 rev=1，拉取可见', async () => {
   assert.ok(p.seq >= 1)
 })
 
+test('文件夹可推送、拉取，删除状态也会同步', async () => {
+  const folder = { id: 'f1', name: '量子光学', createdAt: 1, updatedAt: 1, deleted: 0, baseRev: 0 }
+  const created = await post('/api/push', { deviceId: 'A', folders: [folder] })
+  assert.deepEqual(created.folders, [{ id: 'f1', status: 'ok', rev: 1 }])
+  const first = await get('/api/pull?since=0')
+  assert.equal(first.folders.find((f) => f.id === 'f1').name, '量子光学')
+  const deleted = await post('/api/push', { deviceId: 'A', folders: [{ ...folder, deleted: 1, updatedAt: 2, baseRev: 1 }] })
+  assert.equal(deleted.folders[0].rev, 2)
+  const next = await get(`/api/pull?since=${first.seq}`)
+  assert.equal(next.folders[0].deleted, 1)
+})
+
 test('基于旧版本的推送产生冲突并返回服务器版本，不覆盖', async () => {
   const ok = await post('/api/push', { deviceId: 'A', cards: [{ ...card('c1', 'v2', { updatedAt: 2 }), baseRev: 1 }] })
   assert.equal(ok.cards[0].status, 'ok')

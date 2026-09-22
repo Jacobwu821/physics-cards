@@ -1,12 +1,12 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest'
 import { db } from '../lib/db'
-import { createCard, createDeck, rateCard, saveImage, undoLog, updateSettings } from '../lib/repo'
+import { createCard, createDeck, createFolder, rateCard, saveImage, undoLog, updateSettings } from '../lib/repo'
 import { exportBackup, importBackup, validateBackup } from './backup'
 
 describe('备份与恢复', () => {
   beforeEach(async () => {
-    await Promise.all([db.decks.clear(), db.cards.clear(), db.states.clear(), db.logs.clear(), db.images.clear(), db.settings.clear()])
+    await Promise.all([db.folders.clear(), db.decks.clear(), db.cards.clear(), db.states.clear(), db.logs.clear(), db.images.clear(), db.settings.clear()])
   })
 
   it('导出后清空再导入，卡片内容、图片与复习进度一致', async () => {
@@ -34,7 +34,7 @@ describe('备份与恢复', () => {
     expect(await db.cards.count()).toBe(0)
 
     const r = await importBackup(roundtrip, 'replace')
-    expect(r).toEqual({ decks: 1, cards: 1, logs: 2, images: 1 })
+    expect(r).toEqual({ folders: 0, decks: 1, cards: 1, logs: 2, images: 1 })
     const c2 = await db.cards.get(card.id)
     expect(c2?.front).toBe(card.front)
     expect(c2?.back).toBe(card.back)
@@ -65,6 +65,23 @@ describe('备份与恢复', () => {
     backup.cards[0] = { ...backup.cards[0], front: '更新', updatedAt: card.updatedAt + 1000 }
     await importBackup(backup, 'merge')
     expect((await db.cards.get(card.id))?.front).toBe('更新')
+  })
+
+  it('文件夹随备份往返，旧版无文件夹备份仍可导入', async () => {
+    const folder = await createFolder('原子物理')
+    const deck = await createDeck('双能级', 0, folder.id)
+    const backup = await exportBackup()
+    expect(backup.folders?.map((f) => f.id)).toEqual([folder.id])
+    await db.folders.clear()
+    await db.decks.clear()
+    await importBackup(validateBackup(backup), 'replace')
+    expect((await db.decks.get(deck.id))?.folderId).toBe(folder.id)
+    expect((await db.folders.get(folder.id))?.name).toBe('原子物理')
+
+    const oldBackup = { ...backup, folders: undefined, decks: [{ ...deck, folderId: undefined }] }
+    await importBackup(validateBackup(oldBackup), 'replace')
+    expect(await db.folders.count()).toBe(0)
+    expect((await db.decks.get(deck.id))?.name).toBe('双能级')
   })
 
   it('拒绝无效文件', () => {

@@ -2,11 +2,12 @@
 // - 'server'：自托管 Node 服务（server/），逻辑在服务端。
 // - 'github'：用 GitHub 私有仓库里的 sync/data.json 当数据库，"服务端逻辑"在本地执行，
 //   写回时用 Contents API 的 sha 做比较并交换（sha 不匹配返回 409），冲突则重新读取再合并，避免互相覆盖。
-import type { Card, CardState, Deck, ReviewLog, Settings } from '../lib/types'
+import type { Card, CardState, Deck, Folder, ReviewLog, Settings } from '../lib/types'
 
 export type PushItem<T> = T & { baseRev: number }
 export interface PushBody {
   deviceId: string
+  folders: PushItem<Folder>[]
   decks: PushItem<Deck>[]
   cards: PushItem<Card>[]
   states: CardState[]
@@ -14,6 +15,7 @@ export interface PushBody {
   images: Array<{ id: string; mime: string; size: number }>
 }
 export interface PushResp {
+  folders: Array<{ id: string; status: 'ok' | 'conflict'; rev: number; server?: Folder }>
   decks: Array<{ id: string; status: 'ok' | 'conflict'; rev: number; server?: Deck }>
   cards: Array<{ id: string; status: 'ok' | 'conflict'; rev: number; server?: Card }>
   states: Array<{ id: string; status: 'ok' | 'stale'; server?: CardState }>
@@ -23,6 +25,7 @@ export interface PushResp {
 export interface PullResp {
   seq: number
   more: boolean
+  folders: Folder[]
   decks: Deck[]
   cards: Card[]
   states: CardState[]
@@ -57,9 +60,9 @@ const parse = <T>(r: StoreRecord): T => ({ ...(r.data as object), rev: r.rev }) 
 
 /** 在本地对 store 应用一次推送（会修改传入的 store），返回结果与是否有改动 */
 export function applyPush(store: Store, body: PushBody): { resp: PushResp; changed: boolean } {
-  const resp: PushResp = { decks: [], cards: [], states: [], logs: [], images: [] }
+  const resp: PushResp = { folders: [], decks: [], cards: [], states: [], logs: [], images: [] }
   let changed = false
-  const versioned = <T extends { id: string; updatedAt: number }>(kind: 'deck' | 'card', items: PushItem<T>[], out: Array<{ id: string; status: 'ok' | 'conflict'; rev: number; server?: T }>) => {
+  const versioned = <T extends { id: string; updatedAt: number }>(kind: 'folder' | 'deck' | 'card', items: PushItem<T>[], out: Array<{ id: string; status: 'ok' | 'conflict'; rev: number; server?: T }>) => {
     for (const item of items || []) {
       const { baseRev = 0, dirty: _d, rev: _r, ...data } = item as PushItem<T> & { dirty?: unknown; rev?: unknown }
       const row = store.records[key(kind, item.id)]
@@ -68,6 +71,7 @@ export function applyPush(store: Store, body: PushBody): { resp: PushResp; chang
       else out.push({ id: item.id, status: 'conflict', rev: row.rev, server: parse<T>(row) })
     }
   }
+  versioned('folder', body.folders || [], resp.folders)
   versioned('deck', body.decks || [], resp.decks)
   versioned('card', body.cards || [], resp.cards)
   const lww = <T extends { updatedAt: number }>(kind: 'state' | 'log', items: T[], idOf: (t: T) => string, out: Array<{ id: string; status: 'ok' | 'stale'; server?: T }>) => {
@@ -95,9 +99,10 @@ export function addImageRecord(store: Store, id: string, mime: string, size: num
 
 export function pullFrom(store: Store, since: number, limit = 1000): PullResp {
   const rows = Object.values(store.records).filter((r) => r.seq > since).sort((a, b) => a.seq - b.seq).slice(0, limit)
-  const out: PullResp = { seq: rows.length ? rows[rows.length - 1].seq : since, more: rows.length === limit, decks: [], cards: [], states: [], logs: [], images: [] }
+  const out: PullResp = { seq: rows.length ? rows[rows.length - 1].seq : since, more: rows.length === limit, folders: [], decks: [], cards: [], states: [], logs: [], images: [] }
   for (const r of rows) {
-    if (r.kind === 'deck') out.decks.push(parse<Deck>(r))
+    if (r.kind === 'folder') out.folders.push(parse<Folder>(r))
+    else if (r.kind === 'deck') out.decks.push(parse<Deck>(r))
     else if (r.kind === 'card') out.cards.push(parse<Card>(r))
     else if (r.kind === 'state') out.states.push(parse<CardState>(r))
     else if (r.kind === 'log') out.logs.push(parse<ReviewLog>(r))

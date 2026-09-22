@@ -29,12 +29,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const settings = useLiveQuery(() => db.settings.get('settings'))
   const configured = !!settings && isSyncConfigured({ syncBackend: settings.syncBackend ?? 'server', syncUrl: settings.syncUrl, syncToken: settings.syncToken, ghToken: settings.ghToken ?? '', ghRepo: settings.ghRepo ?? '' })
   const pendingCount = useLiveQuery(async () => {
-    const [a, b, c, d, e] = await Promise.all([
-      db.decks.where('dirty').equals(1).count(), db.cards.where('dirty').equals(1).count(),
+    const [a, b, c, d, e, f] = await Promise.all([
+      db.folders.where('dirty').equals(1).count(), db.decks.where('dirty').equals(1).count(), db.cards.where('dirty').equals(1).count(),
       db.states.where('dirty').equals(1).count(), db.logs.where('dirty').equals(1).count(),
       db.images.where('dirty').equals(1).count(),
     ])
-    return a + b + c + d + e
+    return a + b + c + d + e + f
   }, [], 0)
 
   const sync = useCallback(async (): Promise<SyncResult | null> => {

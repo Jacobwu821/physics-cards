@@ -1,14 +1,22 @@
 import { describe, it, expect } from 'vitest'
 import { GitHubBackend, applyPush, emptyStore, pullFrom, type PushBody } from './backend'
-import type { Card } from '../lib/types'
+import type { Card, Folder } from '../lib/types'
 
 const card = (id: string, front: string, extra: Partial<Card> = {}): Card => ({
   id, deckId: 'd1', type: 'formula', front, back: 'b', tags: [], source: {}, favorite: 0, suspended: 0, sample: 0,
   createdAt: 1, updatedAt: 1, rev: 0, dirty: 1, deleted: 0, ...extra,
 })
-const body = (p: Partial<PushBody>): PushBody => ({ deviceId: 'devA', decks: [], cards: [], states: [], logs: [], images: [], ...p })
+const body = (p: Partial<PushBody>): PushBody => ({ deviceId: 'devA', folders: [], decks: [], cards: [], states: [], logs: [], images: [], ...p })
+const folder = (id: string, name: string): Folder => ({ id, name, createdAt: 1, updatedAt: 1, rev: 0, dirty: 1, deleted: 0 })
 
 describe('本地执行的存储逻辑（与服务端一致）', () => {
+  it('文件夹可推送、增量拉取；旧版同步存储没有文件夹记录时也能升级', () => {
+    const store = emptyStore()
+    const r = applyPush(store, body({ folders: [{ ...folder('f1', '物理'), baseRev: 0 }] }))
+    expect(r.resp.folders[0]).toEqual({ id: 'f1', status: 'ok', rev: 1 })
+    expect(pullFrom(store, 0).folders[0].name).toBe('物理')
+    expect(pullFrom(store, store.seq).folders).toEqual([])
+  })
   it('新记录 rev=1；基于最新 rev 的更新成功；基于旧 rev 的更新冲突并返回正本', () => {
     const store = emptyStore()
     const r1 = applyPush(store, body({ cards: [{ ...card('c1', 'v1'), baseRev: 0 }] }))

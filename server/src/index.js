@@ -62,10 +62,10 @@ export function createApp({ dataDir, token, staticDir }) {
 
   app.post('/api/push', auth, express.json({ limit: '50mb' }), (req, res) => {
     const b = req.body || {}
-    const out = { decks: [], cards: [], states: [], logs: [], images: [] }
+    const out = { folders: [], decks: [], cards: [], states: [], logs: [], images: [] }
     db.exec('BEGIN')
     try {
-      for (const [kind, key] of [['deck', 'decks'], ['card', 'cards']]) {
+      for (const [kind, key] of [['folder', 'folders'], ['deck', 'decks'], ['card', 'cards']]) {
         for (const item of b[key] || []) {
           const { baseRev = 0, dirty: _d, rev: _r, ...data } = item
           const row = getRec.get(kind, item.id)
@@ -108,10 +108,11 @@ export function createApp({ dataDir, token, staticDir }) {
     const since = Number(req.query.since || 0)
     const limit = 1000
     const rows = listSince.all(since, limit)
-    const out = { seq: rows.length ? rows[rows.length - 1].seq : since, more: rows.length === limit, decks: [], cards: [], states: [], logs: [], images: [] }
+    const out = { seq: rows.length ? rows[rows.length - 1].seq : since, more: rows.length === limit, folders: [], decks: [], cards: [], states: [], logs: [], images: [] }
     for (const r of rows) {
       const data = parse(r)
-      if (r.kind === 'deck') out.decks.push(data)
+      if (r.kind === 'folder') out.folders.push(data)
+      else if (r.kind === 'deck') out.decks.push(data)
       else if (r.kind === 'card') out.cards.push(data)
       else if (r.kind === 'state') out.states.push(data)
       else if (r.kind === 'log') out.logs.push(data)

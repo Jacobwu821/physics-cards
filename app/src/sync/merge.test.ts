@@ -62,6 +62,13 @@ describe('牌组冲突', () => {
     expect(r.canonical.name).toBe('乙')
     expect(r.notice).toContain('乙')
   })
+  it('跨设备移动冲突会提示位置被覆盖', () => {
+    const local: Deck = { id: 'd', name: '甲', folderId: 'f1', sample: 0, createdAt: T, updatedAt: T, rev: 1, dirty: 1, deleted: 0 }
+    const server: Deck = { ...local, folderId: 'f2', rev: 2, dirty: 0 }
+    const r = resolveDeckConflict(local, server)
+    expect(r.canonical.folderId).toBe('f2')
+    expect(r.notice).toContain('另一文件夹')
+  })
 })
 
 describe('评分日志与状态', () => {

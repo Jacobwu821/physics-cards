@@ -1,13 +1,14 @@
 // 备份与恢复：完整导出牌组、卡片、格式/公式源码、标签、图片（base64）和复习记录。
 import { db } from '../lib/db'
 import { getSettings, updateSettings } from '../lib/repo'
-import type { Card, CardState, Deck, ReviewLog } from '../lib/types'
+import type { Card, CardState, Deck, Folder, ReviewLog } from '../lib/types'
 
 export interface BackupFile {
   format: 'physics-cards-backup'
   version: 1
   exportedAt: number
   settings: { dailyNew: number; dailyReview: number }
+  folders?: Folder[] // 旧备份没有文件夹字段
   decks: Deck[]
   cards: Card[]
   states: CardState[]
@@ -36,6 +37,7 @@ export async function exportBackup(): Promise<BackupFile> {
   return {
     format: 'physics-cards-backup', version: 1, exportedAt: Date.now(),
     settings: { dailyNew: s.dailyNew, dailyReview: s.dailyReview },
+    folders: await db.folders.toArray(),
     decks: await db.decks.toArray(),
     cards: await db.cards.toArray(),
     states: await db.states.toArray(),
@@ -52,6 +54,7 @@ export function validateBackup(x: unknown): BackupFile {
   for (const k of ['decks', 'cards', 'states', 'logs', 'images'] as const) {
     if (!Array.isArray(b[k])) throw new Error(`备份缺少 ${k}`)
   }
+  if (b.folders !== undefined && !Array.isArray(b.folders)) throw new Error('备份中的 folders 无效')
   return b as BackupFile
 }
 
@@ -61,13 +64,17 @@ export type ImportMode = 'replace' | 'merge'
  * replace：清空本地全部数据后导入；merge：按 id 合并，较新的记录胜出。
  * 导入的记录标记为 dirty，以便推送到同步服务器（服务器已有不同版本时按冲突规则处理，不会丢失）。
  */
-export async function importBackup(b: BackupFile, mode: ImportMode): Promise<{ decks: number; cards: number; logs: number; images: number }> {
-  const counts = { decks: 0, cards: 0, logs: 0, images: 0 }
-  await db.transaction('rw', [db.decks, db.cards, db.states, db.logs, db.images, db.sessions, db.drafts], async () => {
+export async function importBackup(b: BackupFile, mode: ImportMode): Promise<{ folders: number; decks: number; cards: number; logs: number; images: number }> {
+  const counts = { folders: 0, decks: 0, cards: 0, logs: 0, images: 0 }
+  await db.transaction('rw', [db.folders, db.decks, db.cards, db.states, db.logs, db.images, db.sessions, db.drafts], async () => {
     if (mode === 'replace') {
-      await Promise.all([db.decks.clear(), db.cards.clear(), db.states.clear(), db.logs.clear(), db.images.clear(), db.sessions.clear(), db.drafts.clear()])
+      await Promise.all([db.folders.clear(), db.decks.clear(), db.cards.clear(), db.states.clear(), db.logs.clear(), db.images.clear(), db.sessions.clear(), db.drafts.clear()])
     }
     const newer = <T extends { updatedAt: number }>(local: T | undefined, inc: T) => !local || inc.updatedAt > local.updatedAt
+    for (const f of b.folders ?? []) {
+      if (mode === 'merge' && !newer(await db.folders.get(f.id), f)) continue
+      await db.folders.put({ ...f, dirty: 1 }); counts.folders++
+    }
     for (const d of b.decks) {
       if (mode === 'merge' && !newer(await db.decks.get(d.id), d)) continue
       await db.decks.put({ ...d, dirty: 1 }); counts.decks++
